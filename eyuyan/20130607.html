@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<title>易语言使用 NtQuerySystemInformation 取CPU使用率</title>
+<title>[易语言]使用NtQuerySystemInformation - CPU使用率</title>
 <style type="text/css">
 <!--
 .STYLE1 {
@@ -16,9 +16,50 @@
 </head>
 
 <body>
-<h1 align="center">x86/x64 汇编语言 on windows </h1>
+<h1 align="center">[易语言]使用NtQuerySystemInformation - CPU使用率</h1>
 <hr />
-<h2>易语言使用 NtQuerySystemInformation 取CPU使用率 
+<h2>
+.版本 2
+
+.程序集 窗口程序集1
+.程序集变量 lidOldIdle, 双精度小数型
+.程序集变量 liOldSystem, 双精度小数型
+
+.子程序 __启动窗口_创建完毕
+
+
+
+.子程序 取CPU使用率, 整数型
+.局部变量 spi, SYSTEM_PERFORMANCE_INFORMATION
+.局部变量 sti, SYSTEM_TIME_INFORMATION
+.局部变量 curIdle, 双精度小数型
+.局部变量 curSystem, 双精度小数型
+.局部变量 lngResult, 双精度小数型
+
+lngResult ＝ NtQuerySystemInformation_sti (#SYSTEM_TIME_INFORMATION, sti, 32, 0)
+.如果真 (lngResult ≠ 0)
+    返回 (-1)
+.如果真结束
+lngResult ＝ NtQuerySystemInformation_spi (#SYSTEM_PERFORMANCE_INFORMATION, spi, 512, 0)
+.如果真 (lngResult ≠ 0)
+    返回 (-1)
+.如果真结束
+curIdle ＝ spi.liIdleTime － lidOldIdle
+curSystem ＝ sti.liKeSystemTime － liOldSystem
+.如果真 (curSystem ≠ 0)
+    lngResult ＝ curIdle ÷ curSystem
+.如果真结束
+lngResult ＝ 100 － lngResult × 100 ÷ 到数值 (读环境变量 (“NUMBER_OF_PROCESSORS”))
+lidOldIdle ＝ spi.liIdleTime
+liOldSystem ＝ sti.liKeSystemTime
+返回 (lngResult)
+
+
+.子程序 _时钟1_周期事件
+
+标签1.标题 ＝ “CPU占用率：” ＋ 到文本 (取CPU使用率 ()) ＋ “%”
+
+
 </h2>
 
 
