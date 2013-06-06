@@ -1,4 +1,319 @@
-<h1 align="center"> 易语言使用 NtQuerySystemInformation 取CPU使用率 </h1>
 <hr>
 
   支持在所有32位系统以及64位系统获得当前CPU使用率！
+  
+  
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>易语言使用 NtQuerySystemInformation 取CPU使用率</title>
+<style type="text/css">
+<!--
+.STYLE1 {
+	color: #FF0000;
+	font-weight: bold;
+}
+.STYLE2 {color: #0000FF}
+.STYLE3 {color: #FF0000}
+-->
+</style>
+</head>
+
+<body>
+<h1 align="center">x86/x64 汇编语言 on windows </h1>
+<hr />
+<h2>7. 易语言使用 NtQuerySystemInformation 取CPU使用率 
+</h2>
+<p><em><strong>t.obj</strong></em> 是我们例子中的 object 文件，COFF 格式的全称为：<strong>Common Object File Format</strong></p>
+<p>我们的 <em><strong>t.obj</strong></em> 是这样来的：</p>
+<table style="BORDER-BOTTOM: #cccccc 1px dotted; BORDER-LEFT: #cccccc 1px dotted; TABLE-LAYOUT: fixed; BORDER-TOP: #cccccc 1px dotted; BORDER-RIGHT: #cccccc 1px dotted" border="0" cellspacing="0" cellpadding="6" width="95%" align="center">
+  <tr>
+    <td style="WORD-WRAP: break-word" bgcolor="#f3f3f3"><p><font color="#0000ff">nasm -f win64 t.asm -o t.obj</font></p></td>
+  </tr>
+</table>
+<p>将 <strong>t.asm</strong> 编译成 win64 的 <strong>COFF</strong> 文件格式。 </p>
+<h3>7.1 t.obj 的结构图 </h3>
+<p><img src="../images/t_obj.png" width="820" height="529" /></p>
+<p>开始处是 <em><strong>t.obj</strong></em> 的 <strong>COFF </strong>文件头，它是前面提到过的 <strong>IMAGE_FILE_HEADER </strong>结构，接下来的是 section 表，再接下来的是<em><strong> t.obj</strong></em> 的数据</p>
+<h3>7.2　COFF 文件头 </h3>
+<p>从 0x00 ~ 0x13 共 20 bytes 是<strong> COFF</strong> 文件头，实际上它就是 <strong>IMAGE_FILE_HEADER</strong> 结构</p>
+<table style="BORDER-BOTTOM: #cccccc 1px dotted; BORDER-LEFT: #cccccc 1px dotted; TABLE-LAYOUT: fixed; BORDER-TOP: #cccccc 1px dotted; BORDER-RIGHT: #cccccc 1px dotted" border=0 cellSpacing=0 cellPadding=6 width="95%" align=center>
+    <tr>
+      <td style="WORD-WRAP: break-word" bgColor=#f3f3f3>
+      <P>00000000&nbsp; 64 86&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Machine<BR>00000002&nbsp; 02 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // NumberOfSections<BR>00000004&nbsp; FC AC DD 4B&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // TimeDateStamp<BR>00000008&nbsp; E7 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // PointerTosymbolTable<BR>0000000C&nbsp; 0C 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // NumberOfSymbols<BR>00000010&nbsp; 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // SizeOfOptionalHeader<BR>00000002&nbsp; 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Characteristics</P></td>
+    </tr>
+</table>
+<p><em><strong>t.obj</strong></em> 是一个 64 位的 COFF 文件，有 2 个 section，并且使用了 symbol table，symbol table 位置在 0xE7 处，这是个 offset 值，基于<em><strong> t.obj</strong></em> 的开始。symbol 数是 0x0C</p>
+<p>和<em><strong> t.exe </strong></em>映像文件不同的是，<strong>object</strong> 文件使用了 symbol table，在 WinNT.h 定义了这个 symbols table 结构： </p>
+  <table style="BORDER-BOTTOM: #cccccc 1px dotted; BORDER-LEFT: #cccccc 1px dotted; TABLE-LAYOUT: fixed; BORDER-TOP: #cccccc 1px dotted; BORDER-RIGHT: #cccccc 1px dotted" border=0 cellSpacing=0 cellPadding=6 width="95%" align=center>
+    <tr>
+      <td style="WORD-WRAP: break-word" bgColor=#f3f3f3>
+<P>//<BR>// Symbol format.<BR>//</P>
+<P>typedef struct _IMAGE_SYMBOL {<BR>&nbsp;&nbsp;&nbsp; union {<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; BYTE&nbsp;&nbsp;&nbsp; ShortName[8];<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; struct {<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; Short;&nbsp;&nbsp;&nbsp;&nbsp; // if 0, use LongName<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; Long;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // offset into string table<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; } Name;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; LongName[2];&nbsp;&nbsp;&nbsp; // PBYTE [2]<BR>&nbsp;&nbsp;&nbsp; } N;<BR>&nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; Value;<BR>&nbsp;&nbsp;&nbsp; SHORT&nbsp;&nbsp; SectionNumber;<BR>&nbsp;&nbsp;&nbsp; WORD&nbsp;&nbsp;&nbsp; Type;<BR>&nbsp;&nbsp;&nbsp; BYTE&nbsp;&nbsp;&nbsp; StorageClass;<BR>&nbsp;&nbsp;&nbsp; BYTE&nbsp;&nbsp;&nbsp; NumberOfAuxSymbols;<BR>} IMAGE_SYMBOL;<BR>typedef IMAGE_SYMBOL UNALIGNED *PIMAGE_SYMBOL;</P>
+      <P>#define IMAGE_SIZEOF_SYMBOL&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 18</P></td>
+    </tr>
+  </table>
+<p>这个 symbol table 的大小为 18 个字节，共有 0x0C 个 symbol table，因此整个 symbol table 是 <strong>216</strong> 个字节，即：从 <strong>0x000000E7 ~ 0x000001BE</strong> 是整个 symbol table 所在。</p>
+<h3>7.3 t.obj 的 section table </h3>
+<p>节表的数据结构前面已经介绍过，这里再重新看看 <strong>IMAGE_SECTION_HEADER</strong> 结构：</p>
+<table style="BORDER-BOTTOM: #cccccc 1px dotted; BORDER-LEFT: #cccccc 1px dotted; TABLE-LAYOUT: fixed; BORDER-TOP: #cccccc 1px dotted; BORDER-RIGHT: #cccccc 1px dotted" border="0" cellspacing="0" cellpadding="6" width="95%" align="center">
+  <tr>
+    <td style="WORD-WRAP: break-word" bgcolor="#f3f3f3"><p>//<br />
+      // Section header format.<br />
+      //</p>
+        <p>#define IMAGE_SIZEOF_SHORT_NAME&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 8</p>
+      <p>typedef struct _IMAGE_SECTION_HEADER {<br />
+        &nbsp;&nbsp;&nbsp; BYTE&nbsp;&nbsp;&nbsp; Name[IMAGE_SIZEOF_SHORT_NAME];<br />
+        &nbsp;&nbsp;&nbsp; union {<br />
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; PhysicalAddress;<br />
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; VirtualSize;<br />
+        &nbsp;&nbsp;&nbsp; } Misc;<br />
+        &nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; VirtualAddress;<br />
+        &nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; SizeOfRawData;<br />
+        &nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; PointerToRawData;<br />
+        &nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; PointerToRelocations;<br />
+        &nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; PointerToLinenumbers;<br />
+        &nbsp;&nbsp;&nbsp; WORD&nbsp;&nbsp;&nbsp; NumberOfRelocations;<br />
+        &nbsp;&nbsp;&nbsp; WORD&nbsp;&nbsp;&nbsp; NumberOfLinenumbers;<br />
+        &nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; Characteristics;<br />
+        } IMAGE_SECTION_HEADER, *PIMAGE_SECTION_HEADER;</p>
+      <p>#define IMAGE_SIZEOF_SECTION_HEADER&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 40</p></td>
+  </tr>
+</table>
+<p>由前面的 <strong>IMAGE_FILE_HEADER</strong> 结构中的 <strong>NumberOfSections = 2 </strong>得知，<em><strong>t.obj </strong></em>有 2 个 section table，<em><strong>t.obj</strong></em> 的 section table 位置在<strong> 0x14 ~ 0x63</strong> 处，共 80 bytes，下面看看 <strong>t.obj </strong>的 section table 的内容：</p>
+  <table style="BORDER-BOTTOM: #cccccc 1px dotted; BORDER-LEFT: #cccccc 1px dotted; TABLE-LAYOUT: fixed; BORDER-TOP: #cccccc 1px dotted; BORDER-RIGHT: #cccccc 1px dotted" border=0 cellSpacing=0 cellPadding=6 width="95%" align=center>
+    <tr>
+      <td style="WORD-WRAP: break-word" bgColor=#f3f3f3>
+<P><span class="STYLE1">00000014&nbsp; 2E 64 61 74 61 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // name = ".data"</span><BR>
+  0000001C&nbsp; 00 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // VirtualSize<BR>00000020&nbsp; 00 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // VirtualAddress<BR>00000024&nbsp; 29 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // SizeOfRawData<BR>00000028&nbsp; 64 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // PointerToRawData<BR>0000002C&nbsp; 8D 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // PointerToRelocation<BR>00000030&nbsp; 00 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // PointerToLinenumber<BR>00000034&nbsp; 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // NumberOfRelocation<BR>00000036&nbsp; 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // NumberOfLinenumbers<BR>00000038&nbsp; 40 00 30 C0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Characteristics</P>
+      <P><span class="STYLE1">0000003C&nbsp; 2E 74 65 78 74 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // name = ".text"</span><BR>
+        00000044&nbsp; 00 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // VirtualSize<BR>00000048&nbsp; 00 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // VirtualAddress<BR>0000004C&nbsp; 3C 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // SizeOfRawData<BR>00000050&nbsp; 8D 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // PointerToRawData<BR>00000054&nbsp; C9 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // PointerToRelocation<BR>00000058&nbsp; 00 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // PointerToLinenumber<BR>0000005C&nbsp; 03 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // NumberOfRelocation<BR>0000005E&nbsp; 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // NubmerOfLinenumbers<BR>00000060&nbsp; 20 00 50 60&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Characteristics</P></td>
+    </tr>
+</table>
+  <p>上面的红色标注部分是 2 个 section 的名称，第 1 个 section 是 <em><strong>.data</strong></em> 节，第 2 个是 <em><strong>.text </strong></em>节。</p>
+  <p>注意的是：这 2 个 section 的 VirtualSize 和 VirtualAddress 都是 0，由于 object 文件是未经过 link，因此，VirtualSize 和 VirtualAddress 都是 0 值。</p>
+  <p><em><strong>.data</strong></em> 节的 PointerToRawData 是 64，SizeOfRawData 是 29，说明 <strong><em>.data</em></strong> 节在 <em><strong>t.obj</strong></em> 文件中的位置是 <strong>0x64 ~ 0x8C</strong> 共 41 bytes </p>
+  <p><strong><em>.text</em></strong> 节的 PointerToRawData 是 8D, SizeOfRawData 是 3C，说明 <em><strong>.text </strong></em>节在 <em><strong>t.obj</strong></em> 文件中的位置是 <strong>0x8D ~ 0xC8 </strong>共 60 bytes。而<em><strong> .text</strong></em> 使用了<span class="STYLE3"> Relocation 表，这个 Relocation 位置在 0xC9 处，NumberOfRelocation = 03 表明，<em><strong>.text </strong></em>使用 3 个 Relocation 表 </span></p>
+  <h2 class="STYLE2">7.4 t.obj 链接后的重定位 </h2>
+  <p>这里我们来看一看 <em><strong>t.obj</strong></em> 在链接过程中是如何进行重定位的？</p>
+  <p>下面是 <strong>t.obj </strong>的<em><strong> .text</strong></em> 在<span class="STYLE3"><strong>未重定位</strong></span>之前的代码（摘自 <em><strong>t.obj</strong></em> 的 <strong>.text</strong> 节）： </p>
+    <table style="BORDER-BOTTOM: #cccccc 1px dotted; BORDER-LEFT: #cccccc 1px dotted; TABLE-LAYOUT: fixed; BORDER-TOP: #cccccc 1px dotted; BORDER-RIGHT: #cccccc 1px dotted" border=0 cellSpacing=0 cellPadding=6 width="95%" align=center>
+    <tr>
+      <td style="WORD-WRAP: break-word" bgColor=#fdfddf>
+      <P>0000008D&nbsp; 48 81 EC 28 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; sub rsp, 0x28<BR>00000094&nbsp; 48 B9 00 00 00 00 00 00 00 00&nbsp;&nbsp;&nbsp; mov rcx, 0<BR>
+        <span class="STYLE3">0000009E&nbsp; 48 BA 1C 00 00 00 00 00 00 00&nbsp;&nbsp;&nbsp; mov rdx, 0x1c</span>&nbsp;&nbsp;（1）<BR>
+        <span class="STYLE3">000000A8&nbsp; 49 B8 00 00 00 00 00 00 00 00&nbsp;&nbsp;&nbsp; mov r8, 0</span>&nbsp;&nbsp;（2）<BR>
+        000000B3&nbsp; 49 B9 01 00 00 00 00 00 00 00&nbsp;&nbsp;&nbsp; mov r9, 0x1<BR>
+        <span class="STYLE3">000000BC&nbsp; E8 00 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; call .+0x00</span>&nbsp;&nbsp;（3）<BR>
+        000000C1&nbsp; 48 81 C4 28 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; add rsp, 0x28<BR>000000C8&nbsp; C3&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ret</P></td>
+    </tr>
+  </table>
+  <p>上面的红色标注部分显示了：有 3 个地方需要进行重定位的。 </p>
+  <p>（1）我们的源代码是：<span class="STYLE2"><strong>mov rdx, text </strong></span>, nasm 将它编译为 <span class="STYLE1">48 BA 1C 00 00 00 00 00 00 0</span><span class="STYLE3"><strong>0</strong> </span>，那么在 link 时，这个地址值 0x1c 是一个 offset 值，需要被重新替换为真实的 <strong>text 常量</strong>的地址值。</p>
+  <p>（2）我们的源代码是：<span class="STYLE2"><strong>mov r8, caption  </strong></span>，nasm 将它编译为 <span class="STYLE3"><strong>49 B8 00 00 00 00 00 00 00 00</strong></span>，同样地址值 0x00 是不正确的，link 时需替换为真实的 <strong>caption 常量</strong>的地址值。 </p>
+  <p>（3）源代码是：<span class="STYLE2"><strong>call MessageBoxA </strong></span>，nasm 将它编译为 <span class="STYLE3"><strong>e8 00 00 00 00</strong> </span>，同样我们需要的是 MessageBoxA 的地址。</p>
+  <p>于是在 <em><strong>t.obj</strong></em> 中就需要有 3 个 Relocation 表，也就是上面所说的 <em><strong>.text</strong></em> 节使用了 3 个 <strong>relocation</strong> 表。并指明了 relocation 表在 0xC9 处，从 <strong>0xC9 ~ 0xE6 </strong>共 30 bytes。</p>
+  <h3>7.4.1　relocation 表结构 </h3>
+  <p>在 WinNT.h 定义了 <strong>IMAGE_RELOCATION </strong>结构用来描述使用 relocation 表，如下：</p>
+  <table style="BORDER-BOTTOM: #cccccc 1px dotted; BORDER-LEFT: #cccccc 1px dotted; TABLE-LAYOUT: fixed; BORDER-TOP: #cccccc 1px dotted; BORDER-RIGHT: #cccccc 1px dotted" border=0 cellSpacing=0 cellPadding=6 width="95%" align=center>
+    <tr>
+      <td style="WORD-WRAP: break-word" bgColor=#f3f3f3>
+<P>//<BR>// Relocation format.<BR>//</P>
+      <P>typedef struct _IMAGE_RELOCATION {<BR>&nbsp;&nbsp;&nbsp; union {<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; VirtualAddress;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; RelocCount;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Set to the real count when IMAGE_SCN_LNK_NRELOC_OVFL is set<BR>&nbsp;&nbsp;&nbsp; } DUMMYUNIONNAME;<BR>&nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; SymbolTableIndex;<BR>&nbsp;&nbsp;&nbsp; WORD&nbsp;&nbsp;&nbsp; Type;<BR>} IMAGE_RELOCATION;<BR>typedef IMAGE_RELOCATION UNALIGNED *PIMAGE_RELOCATION;</P></td>
+    </tr>
+  </table>  
+  <p>这个结构共 <strong>10 bytes</strong>，这些域的含义是：</p>
+  <table width="719" border="1">
+    <tr>
+      <td width="174"><div align="center"><strong>域　</strong></div></td>
+      <td width="92"><div align="center"><strong>size</strong></div></td>
+      <td width="431"><div align="center"><strong>描述</strong></div></td>
+    </tr>
+    <tr>
+      <td><div align="center">VritualAddress</div></td>
+      <td><div align="center">DWORD</div></td>
+      <td><div align="center">指出 section 中的哪个 RVA 地址需要进行 relocate 操作 </div></td>
+    </tr>
+    <tr>
+      <td><div align="center">SymbolTableIndex</div></td>
+      <td><div align="center">DWORD</div></td>
+      <td><div align="center">用来在 Symbol table 中进行索引 </div></td>
+    </tr>
+    <tr>
+      <td><div align="center">Type</div></td>
+      <td><div align="center">WORD</div></td>
+      <td><div align="center">表明 VirtualAddress 是个怎样类型的 address </div></td>
+    </tr>
+  </table>
+  <p>在 <strong>WinNT.h</strong> 定义了 VirtualAddress 的 type 值，下面是 x64 平台下的定义：</p>
+  <table style="BORDER-BOTTOM: #cccccc 1px dotted; BORDER-LEFT: #cccccc 1px dotted; TABLE-LAYOUT: fixed; BORDER-TOP: #cccccc 1px dotted; BORDER-RIGHT: #cccccc 1px dotted" border=0 cellSpacing=0 cellPadding=6 width="95%" align=center>
+    <tr>
+      <td style="WORD-WRAP: break-word" bgColor=#f3f3f3>
+      <P><SPAN style="FONT-FAMILY: 'Calibri','sans-serif'; FONT-SIZE: 11pt; mso-bidi-font-size: 10.0pt; mso-fareast-font-family: 'MS Mincho'; mso-bidi-font-family: Arial; mso-ansi-language: EN-US; mso-fareast-language: EN-US; mso-bidi-language: AR-SA" lang=EN-US>//<BR>// x64 relocations<BR>//<BR>#define IMAGE_REL_AMD64_ABSOLUTE&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0x0000&nbsp; // Reference is absolute, no relocation is necessary<BR>#define IMAGE_REL_AMD64_ADDR64&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0x0001&nbsp; // 64-bit address (VA).<BR>#define IMAGE_REL_AMD64_ADDR32&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0x0002&nbsp; // 32-bit address (VA).<BR>#define IMAGE_REL_AMD64_ADDR32NB&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0x0003&nbsp; // 32-bit address w/o image base (RVA).<BR>#define IMAGE_REL_AMD64_REL32&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0x0004&nbsp; // 32-bit relative address from byte following reloc<BR>#define IMAGE_REL_AMD64_REL32_1&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0x0005&nbsp; // 32-bit relative address from byte distance 1 from reloc<BR>#define IMAGE_REL_AMD64_REL32_2&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0x0006&nbsp; // 32-bit relative address from byte distance 2 from reloc<BR>#define IMAGE_REL_AMD64_REL32_3&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0x0007&nbsp; // 32-bit relative address from byte distance 3 from reloc<BR>#define IMAGE_REL_AMD64_REL32_4&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0x0008&nbsp; // 32-bit relative address from byte distance 4 from reloc<BR>#define IMAGE_REL_AMD64_REL32_5&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0x0009&nbsp; // 32-bit relative address from byte distance 5 from reloc<BR>#define IMAGE_REL_AMD64_SECTION&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0x000A&nbsp; // Section index<BR>#define IMAGE_REL_AMD64_SECREL&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0x000B&nbsp; // 32 bit offset from base of section containing target<BR>#define IMAGE_REL_AMD64_SECREL7&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0x000C&nbsp; // 7 bit unsigned offset from base of section containing target<BR>#define IMAGE_REL_AMD64_TOKEN&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0x000D&nbsp; // 32 bit metadata token<BR>#define IMAGE_REL_AMD64_SREL32&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0x000E&nbsp; // 32 bit signed span-dependent value emitted into object<BR>#define IMAGE_REL_AMD64_PAIR&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0x000F<BR>#define IMAGE_REL_AMD64_SSPAN32&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0x0010&nbsp; // 32 bit signed span-dependent value applied at link time</SPAN></P></td>
+    </tr>
+  </table>  
+  <p>其中，常用的是 <strong>ADDR64 </strong>类型和 <strong>REL32</strong> 类型。 </p>
+  <span style="FONT-FAMILY: 'Calibri','sans-serif'; FONT-SIZE: 11pt; mso-bidi-font-size: 10.0pt; mso-fareast-font-family: 'MS Mincho'; mso-bidi-font-family: Arial; mso-ansi-language: EN-US; mso-fareast-language: EN-US; mso-bidi-language: AR-SA"><strong>IMAGE_REL_AMD64_ADDR64</strong></span> 类型表明：relocation 表中的 VirtualAddress 是个 64 位的 Virtual Address，也就是说：在 link 后，VirtualAddress 将会变成 64 位的地址值，它是直接<strong>（绝对值</strong>） virtual address，而不是 <strong>RVA</strong> 值。 <br />
+  <span style="FONT-FAMILY: 'Calibri','sans-serif'; FONT-SIZE: 11pt; mso-bidi-font-size: 10.0pt; mso-fareast-font-family: 'MS Mincho'; mso-bidi-font-family: Arial; mso-ansi-language: EN-US; mso-fareast-language: EN-US; mso-bidi-language: AR-SA"><strong> IMAGE_REL_AMD64_ADDR32</strong></span> 类型表明：relocation 表中的 VirtualAddress 是个<strong>相对值</strong>，是基于某个 base 值的<strong> 32 位的 signed offset</strong> 值。
+  <p>那么下面看看 <em><strong>.text</strong></em> 节所使用的 relocation 表是怎样的？ </p>
+  <table style="BORDER-BOTTOM: #cccccc 1px dotted; BORDER-LEFT: #cccccc 1px dotted; TABLE-LAYOUT: fixed; BORDER-TOP: #cccccc 1px dotted; BORDER-RIGHT: #cccccc 1px dotted" border=0 cellSpacing=0 cellPadding=6 width="95%" align=center>
+    <tr>
+      <td style="WORD-WRAP: break-word" bgColor=#f3f3f3>
+<P><SPAN style="FONT-FAMILY: 'Calibri','sans-serif'; FONT-SIZE: 11pt; mso-bidi-font-size: 10.0pt; mso-fareast-font-family: 'MS Mincho'; mso-bidi-font-family: Arial; mso-ansi-language: EN-US; mso-fareast-language: EN-US; mso-bidi-language: AR-SA" lang=EN-US>000000C9&nbsp; 13 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // VirtaulAddress<BR>000000CD&nbsp; 02 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // SymbolTableIndex<BR>
+000000D1&nbsp; 01 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Type ( 64bit VA)</SPAN></P>
+<P><SPAN style="FONT-FAMILY: 'Calibri','sans-serif'; FONT-SIZE: 11pt; mso-bidi-font-size: 10.0pt; mso-fareast-font-family: 'MS Mincho'; mso-bidi-font-family: Arial; mso-ansi-language: EN-US; mso-fareast-language: EN-US; mso-bidi-language: AR-SA" lang=EN-US>000000D3&nbsp; 1D 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // VirtualAddress<BR>000000D7&nbsp; 02 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // SymbolTalbeIndex<BR>
+000000DB&nbsp; 01 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Type (64bit VA)</SPAN></P>
+      <P><SPAN style="FONT-FAMILY: 'Calibri','sans-serif'; FONT-SIZE: 11pt; mso-bidi-font-size: 10.0pt; mso-fareast-font-family: 'MS Mincho'; mso-bidi-font-family: Arial; mso-ansi-language: EN-US; mso-fareast-language: EN-US; mso-bidi-language: AR-SA" lang=EN-US>000000DD&nbsp; 30 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // VirtaulAddress<BR>000000E1&nbsp; 07 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // SymbolTableIndex<BR>000000E5&nbsp; 04 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Type (32bit relative)</SPAN></P></td>
+    </tr>
+  </table>  
+  <p>● 第 1 个 relocation 表，它的 VirtualAddress 是 0x13，表明：<em><strong>.text</strong></em> 节中的 <strong>0x13</strong> 处的地址值需要进行 relocate 操作，它是个 64 位的 <strong>VA</strong> 值，重定位操作是根据 <strong>SymbolTable[2]</strong> 提供的信息进行的，Symbol Table 是 0 索引开始。 </p>
+  <p>● 第 2 个 relocation 表，意义完全和第 1 个 relocation 表一样。 </p>
+  <p>● 第 3 个 relocation 表和上面两个表所不同的是，VirtualAddress 是个<strong> REL32 </strong>类型的值它是个 32 位的 offset 值。 </p>
+  <p>&nbsp;</p>
+  <h3>7.4.2 Symbol Table 结构 </h3>
+  <p>在 <strong>WinNT.h</strong> 里对 symbol table 的定义为：</p>
+  <table style="BORDER-BOTTOM: #cccccc 1px dotted; BORDER-LEFT: #cccccc 1px dotted; TABLE-LAYOUT: fixed; BORDER-TOP: #cccccc 1px dotted; BORDER-RIGHT: #cccccc 1px dotted" border=0 cellSpacing=0 cellPadding=6 width="95%" align=center>
+    <tr>
+      <td style="WORD-WRAP: break-word" bgColor=#f3f3f3>
+<P><SPAN style="FONT-FAMILY: 'Calibri','sans-serif'; FONT-SIZE: 11pt; mso-bidi-font-size: 10.0pt; mso-fareast-font-family: 'MS Mincho'; mso-bidi-font-family: Arial; mso-ansi-language: EN-US; mso-fareast-language: EN-US; mso-bidi-language: AR-SA" lang=EN-US>//<BR>// Symbol format.<BR>//</SPAN></P>
+<P><SPAN style="FONT-FAMILY: 'Calibri','sans-serif'; FONT-SIZE: 11pt; mso-bidi-font-size: 10.0pt; mso-fareast-font-family: 'MS Mincho'; mso-bidi-font-family: Arial; mso-ansi-language: EN-US; mso-fareast-language: EN-US; mso-bidi-language: AR-SA" lang=EN-US>typedef struct _IMAGE_SYMBOL {<BR>&nbsp;&nbsp;&nbsp; union {<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; BYTE&nbsp;&nbsp;&nbsp; ShortName[8];<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; struct {<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; Short;&nbsp;&nbsp;&nbsp;&nbsp; // if 0, use LongName<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; Long;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // offset into string table<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; } Name;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; LongName[2];&nbsp;&nbsp;&nbsp; // PBYTE [2]<BR>&nbsp;&nbsp;&nbsp; } N;<BR>&nbsp;&nbsp;&nbsp; DWORD&nbsp;&nbsp; Value;<BR>&nbsp;&nbsp;&nbsp; SHORT&nbsp;&nbsp; SectionNumber;<BR>&nbsp;&nbsp;&nbsp; WORD&nbsp;&nbsp;&nbsp; Type;<BR>&nbsp;&nbsp;&nbsp; BYTE&nbsp;&nbsp;&nbsp; StorageClass;<BR>&nbsp;&nbsp;&nbsp; BYTE&nbsp;&nbsp;&nbsp; NumberOfAuxSymbols;<BR>} IMAGE_SYMBOL;<BR>typedef IMAGE_SYMBOL UNALIGNED *PIMAGE_SYMBOL;</SPAN></P>
+      <P><SPAN style="FONT-FAMILY: 'Calibri','sans-serif'; FONT-SIZE: 11pt; mso-bidi-font-size: 10.0pt; mso-fareast-font-family: 'MS Mincho'; mso-bidi-font-family: Arial; mso-ansi-language: EN-US; mso-fareast-language: EN-US; mso-bidi-language: AR-SA" lang=EN-US>#define IMAGE_SIZEOF_SYMBOL&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 18</SPAN></P></td>
+    </tr>
+  </table>  
+<p>这个结构域的含义是：</p>
+  <table width="961" border="1">
+    <tr>
+      <td width="196"><div align="center"><strong>域</strong></div></td>
+      <td width="111"><div align="center"><strong>size</strong></div></td>
+      <td width="632"><div align="center"><strong>描述</strong></div></td>
+    </tr>
+    <tr>
+      <td><div align="center">Name</div></td>
+      <td><div align="center">8 bytes</div></td>
+      <td><div align="center">Symbol 的名称</div></td>
+    </tr>
+    <tr>
+      <td><div align="center">Value</div></td>
+      <td><div align="center">DWORD</div></td>
+      <td><div align="center">这个 value 辅助性质，取决于 SectionNumber 和 StorageClass </div></td>
+    </tr>
+    <tr>
+      <td><div align="center">SectionNumber</div></td>
+      <td><div align="center">SHORT</div></td>
+      <td><div align="center">指向哪个 section，以 section table 中 1-based 为索引 </div></td>
+    </tr>
+    <tr>
+      <td><div align="center">Type</div></td>
+      <td><div align="center">WORD</div></td>
+      <td><div align="center">symbol table 的类型 </div></td>
+    </tr>
+    <tr>
+      <td><div align="center">StorageClass</div></td>
+      <td><div align="center">BYTE</div></td>
+      <td><div align="center">存储类别，是定义如何进行重定位的关键</div></td>
+    </tr>
+    <tr>
+      <td><div align="center">NumberOfAuxSymbols</div></td>
+      <td><div align="center">BYTE</div></td>
+      <td><div align="center">附加 symbol table 个数 </div></td>
+    </tr>
+  </table>
+  <p>NumberOfAuxSymbols 指出附加的 symbol table 个数，附加表紧跟着 symbol table 后面。下面看一看 <em><strong>t.obj</strong></em> 所有的 symbol table </p>
+     <table style="BORDER-BOTTOM: #cccccc 1px dotted; BORDER-LEFT: #cccccc 1px dotted; TABLE-LAYOUT: fixed; BORDER-TOP: #cccccc 1px dotted; BORDER-RIGHT: #cccccc 1px dotted" border=0 cellSpacing=0 cellPadding=6 width="95%" align=center>
+        <tr>
+            <td style="WORD-WRAP: break-word" bgColor=#f3f3f3><SPAN style="FONT-FAMILY: 'Calibri','sans-serif'; FONT-SIZE: 11pt; mso-bidi-font-size: 10.0pt; mso-fareast-font-family: 'MS Mincho'; mso-bidi-font-family: Arial; mso-ansi-language: EN-US; mso-fareast-language: EN-US; mso-bidi-language: AR-SA" lang=EN-US><BR>
+              000000E7&nbsp; 2E 66 69 6C 65 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Name = ".file"<BR>
+              000000EF&nbsp; 00 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Value<BR>
+              000000F3&nbsp; FE FF&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // SectionNumber<BR>
+              000000F5&nbsp; 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Type<BR>
+              000000F7&nbsp; 67&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // StorageClass<BR>
+              000000F8&nbsp; 01&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; //NumberOfAuxSymbols
+              <P><BR>000000F9&nbsp; 74 2E 61 73 6D 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&bbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // *** 辅助表 ****&nbsp;&nbsp; name = "t.asm"<BR>00000101&nbsp; 00 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <BR>00000105&nbsp; 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <BR>00000107&nbsp; 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <BR>00000109&nbsp; 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <BR>0000010A&nbsp; 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </P>
+<P>0000010B&nbsp; 2E 64 61 74 61 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Name = ".data"<BR>00000113&nbsp; 00 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Value<BR>00000117&nbsp; 01 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // SectionNumber<BR>00000119&nbsp; 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Type<BR>0000011B&nbsp; 03&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // StorageClass<BR>0000011C&nbsp; 01&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // NumberOfAuxSymbols</P>
+<P>0000011D&nbsp; 29 00 00 00 00 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // **** 辅助表 ****<BR>00000125&nbsp; 00 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <BR>00000129&nbsp; 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <BR>0000012B&nbsp; 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <BR>0000012D&nbsp; 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <BR>0000012E&nbsp; 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </P>
+<P>0000012F&nbsp; 2E 74 65 78 74 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Name = ".text"<BR>00000137&nbsp; 00 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Value<BR>0000013B&nbsp; 02 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // SectionNumber<BR>0000013D&nbsp; 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Type<BR>0000013F&nbsp; 03&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // StoreageClass<BR>00000140&nbsp; 01&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // NumberOfAuxSymbols</P>
+<P><BR>00000141&nbsp; 3C 00 00 00 03 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // *** 辅助表 ***<BR>00000149&nbsp; 00 00 00 00 <BR>0000014D&nbsp; 00 00 <BR>0000014F&nbsp; 00 00 <BR>00000151&nbsp; 00 <BR>00000152&nbsp; 00 </P>
+<P><BR>00000153&nbsp; 2E 61 62 73 6F 6C 75 74&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Name = ".absolut"<BR>0000015B&nbsp; 00 00 00 00 <BR>0000015F&nbsp; FF FF<BR>00000161&nbsp; 00 00 <BR>00000163&nbsp; 03 <BR>00000164&nbsp; 00 </P>
+<P>00000165&nbsp; 00 00 00 00 04 00 00 00 <BR>0000016D&nbsp; 00 00 00 00<BR>00000171&nbsp; 00 00 <BR>00000173&nbsp; 00 00 <BR>00000174&nbsp; 02 <BR>00000175&nbsp; 00 </P>
+<P>00000176&nbsp; 00 00 00 00 10 00 00 00 <BR>0000017F&nbsp; 00 00 00 00<BR>00000183&nbsp; 00 00 <BR>00000185&nbsp; 00 00 <BR>00000187&nbsp; 02 <BR>00000188&nbsp; 00 </P>
+<P>00000189&nbsp; 63 61 70 74 69 6F 6E 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Name = "caption"<BR>00000191&nbsp; 00 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Value&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <BR>00000195&nbsp; 01 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // SectionNumber<BR>00000197&nbsp; 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Type<BR>00000199&nbsp; 03&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // StorageClass<BR>0000019A&nbsp; 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // NumberOfAuxSymbols</P>
+<P>0000019B&nbsp; 74 65 78 74 00 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Name = "text"<BR>000001A3&nbsp; 1C 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Value<BR>000001A7&nbsp; 01 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // SectionNumber<BR>000001A9&nbsp; 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Type<BR>000001AB&nbsp; 03&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // StoreageClass<BR>000001AC&nbsp; 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // NumberOfAuxSymbols</P>
+          <P>000001AD&nbsp; 6D 61 69 6E 00 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Name = "main"<BR>000001B5&nbsp; 00 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Value<BR>000001B9&nbsp; 02 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // SectionNumber<BR>000001BB&nbsp; 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Type<BR>000001BD&nbsp; 02&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // StoreageClass<BR>000001BE&nbsp; 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // NumberOfAuxSymbols</P></td>
+        </tr>
+    </table> 
+  <p>注意到，第 0 个 symbol table 的 name 是 &quot;.file&quot;，它下面接着一个辅助表，结合这个辅助表得出 <strong>.file = &quot;t.asm&quot; </strong></p>
+  <p>第 2 个 symbol table 是 &quot;.data&quot;，它下面也接着一个辅助表，指出<em><strong> .data </strong></em>的 size 是 0x29 </p>
+  <h2 class="STYLE2">7.4.3 重定位过程 </h2>
+  <p>最后，我们来看一看具体的重定位操作，以 <strong>mov rdx, text </strong>指令中 <strong>text</strong> 重定位为例。</p>
+  <table style="BORDER-BOTTOM: #cccccc 1px dotted; BORDER-LEFT: #cccccc 1px dotted; TABLE-LAYOUT: fixed; BORDER-TOP: #cccccc 1px dotted; BORDER-RIGHT: #cccccc 1px dotted" border=0 cellspacing=0 cellpadding=6 width="95%" align=center>
+    <tr>
+      <td style="WORD-WRAP: break-word" bgcolor=#fdfddf><p>&nbsp;&nbsp;&nbsp; 源码&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; nasm 编译后</p>
+          <p>mov rdx, text&nbsp;&nbsp; =====&gt;&nbsp;&nbsp;&nbsp; 0000009E&nbsp; 48 BA <span class="STYLE3"><strong>1C 00 00 00 00 00 00 00</strong> </span></p></td>
+    </tr>
+  </table>
+  <p>link 需要将 <strong>0x00000000_0000001c</strong> 重新分配正确的地址值，怎么做？</p>
+  <h4>1. link 首先看有哪个 relocation 表需要重定位的。所以先做 relocation 表1 的重定位。 </h4>
+    <table style="BORDER-BOTTOM: #cccccc 1px dotted; BORDER-LEFT: #cccccc 1px dotted; TABLE-LAYOUT: fixed; BORDER-TOP: #cccccc 1px dotted; BORDER-RIGHT: #cccccc 1px dotted" border=0 cellSpacing=0 cellPadding=6 width="95%" align=center>
+    <tr>
+      <td style="WORD-WRAP: break-word" bgColor=#f3f3f3>
+      <P>000000C9&nbsp; 13 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // VirtaulAddress<BR>000000CD&nbsp; 02 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // SymbolTableIndex<BR>000000D1&nbsp; 01 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Type ( 64bit RVA)</P></td>
+    </tr>
+  </table>
+  <p>那么，位于 <strong>RVA 为 0x13</strong> 的地方的地址需要进行<strong>重定位</strong>，这个 <strong>0x13</strong> 的地方到底是哪里？答案是：</p>
+  <table style="BORDER-BOTTOM: #cccccc 1px dotted; BORDER-LEFT: #cccccc 1px dotted; TABLE-LAYOUT: fixed; BORDER-TOP: #cccccc 1px dotted; BORDER-RIGHT: #cccccc 1px dotted" border=0 cellSpacing=0 cellPadding=6 width="95%" align=center>
+    <tr>
+      <td style="WORD-WRAP: break-word" bgColor=#fdfddf>
+      <P><strong>.text</strong> + 0x13 = 0x8d + 0x13 = <span class="STYLE3"><strong>0xA0</strong></span></P></td>
+    </tr>
+  </table>
+  <p>需要重定位的地址在 <strong>0xA0</strong> 处，<strong>.text</strong> 节的 base 为 <strong>0x8D</strong>，这个 0x8D 的值由 <strong>.text</strong> 节结构的<strong> PointerToRawData</strong> 域指出。 </p>
+  <p>而 0xA0 处就是存放 <span class="STYLE3"><strong>1c 00 00 00 00 00 00 00</strong> </span>的地方。由于 relocation 表指向 <strong>SymbolTable[2]</strong> 并且指明 VirtualAddress 是个 64 位的 address 值。</p>
+  <h4>2. 查找 SymbolTable[2] 表格</h4>
+  <table style="BORDER-BOTTOM: #cccccc 1px dotted; BORDER-LEFT: #cccccc 1px dotted; TABLE-LAYOUT: fixed; BORDER-TOP: #cccccc 1px dotted; BORDER-RIGHT: #cccccc 1px dotted" border=0 cellSpacing=0 cellPadding=6 width="95%" align=center>
+    <tr>
+      <td style="WORD-WRAP: break-word" bgColor=#f3f3f3>
+      <P>0000010B&nbsp; 2E 64 61 74 61 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Name = ".data"<BR>00000113&nbsp; 00 00 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Value<BR>00000117&nbsp; 01 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // SectionNumber<BR>00000119&nbsp; 00 00&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // Type<BR>0000011B&nbsp; 03&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // StorageClass<BR>0000011C&nbsp; 01&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; // NumberOfAuxSymbols</P></td>
+    </tr>
+  </table>  
+  <p>SymbolTable[2] 指向 <strong>.data</strong> 节，最重要的是它的 StoreageClass 是 3，下面是 microsoft 对于 StorageClass 作用的解释：</p>
+  <table width="93%" height="25" border="1" cellpadding="0" cellspacing="0">
+    <tr>
+      <td width="20%" valign="top"><p>IMAGE_SYM_CLASS_STATIC</p></td>
+      <td width="8%" valign="top"><p align="center">3</p></td>
+      <td width="72%" valign="top"><p>The offset of the symbol within the section. If the Value field is zero, then the symbol represents a section name.</p></td>
+    </tr>
+  </table>
+  <p>也就是说，VirtualAddess 是基于 section 的 offset 的值。即：<span class="STYLE3"><strong>0x1c 是基于 .data 的 offset 值</strong> </span></p>
+  <h4>3. 生成最终的 virtual address 值</h4>
+  <p>当 link 生成 <strong>PE </strong>格式的 <em><strong>t.exe</strong></em> 时。从上一节得出：<em><strong>.data</strong></em> 被加载 virtual address 为 <span class="STYLE3"><strong>0x00000001_40003000</strong></span></p>
+  <p>因此：指令<span class="STYLE2"><strong> mov rdx, text</strong> </span>的值最终是</p>
+
+<table style="BORDER-BOTTOM: #cccccc 1px dotted; BORDER-LEFT: #cccccc 1px dotted; TABLE-LAYOUT: fixed; BORDER-TOP: #cccccc 1px dotted; BORDER-RIGHT: #cccccc 1px dotted" border=0 cellSpacing=0 cellPadding=6 width="95%" align=center>
+    <tr>
+      <td style="WORD-WRAP: break-word" bgColor=#fdfddf>
+      <P><STRONG><FONT color=#990000>.data + 0x1C = </FONT></STRONG>0x0000000140003000 + 0x1c = <span class="STYLE3"><strong>0x000000014000301C</strong></span></P></td>
+    </tr>
+</table>
+</P>  
+  <p>下面是摘录在 <strong>t.exe </strong>映像的 <em><strong>.text</strong></em> 节的数据</p>
+  <table style="BORDER-BOTTOM: #cccccc 1px dotted; BORDER-LEFT: #cccccc 1px dotted; TABLE-LAYOUT: fixed; BORDER-TOP: #cccccc 1px dotted; BORDER-RIGHT: #cccccc 1px dotted" border=0 cellSpacing=0 cellPadding=6 width="95%" align=center>
+    <tr>
+      <td style="WORD-WRAP: break-word" bgColor=#fdfddf>
+      <P>0000000140001011:&nbsp;&nbsp; 48 BA <span class="STYLE3">1C 30 00 40 01 00 00 00</span>&nbsp;&nbsp;&nbsp;&nbsp; mov rdx, 0x000000014000301C</P></td>
+    </tr>
+  </table>  
+  <p>指令 mov rdx, text 的 text 地址最终被重定位为 0x000000014000301C。</p>
+  <p>&nbsp;</p>
+  <p>&nbsp;</p>
+  <p>&nbsp;</p>
+  <p>&nbsp;</p>
+  <div align="center"><a href="06.html">上一篇</a>：详解 t.exe 映象中的 PE 文件结构&nbsp;&nbsp;&nbsp;<a href="index.html">目　录</a>&nbsp;&nbsp;&nbsp;<a href="08.html">下一篇：</a>无</div>
+<hr />
+<br />
+<div align="center">所有权限 mik 所有，转载请注明出处!
+</div>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+</body>
+</html>
