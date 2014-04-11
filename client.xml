@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Update>
+	<Setting>
+		<SoftName>流光盒子</SoftName>
+		<ShortName>tmultiplayer</ShortName>
+		<UTF8Encode>1</UTF8Encode>
+		<MainExe>launcher.exe</MainExe>
+		<Version>1.0.0.1</Version>
+		<AdCode><![CDATA[<A HREF="http://www.cnmlgb.cn/patch/download/index.html">如果更新失败，请点击下载离线补丁</A>]]></AdCode>
+		<ServerGroup>
+			<Server Name="综合线路" Addr="http://www.cnmlgb.cn/patch/" />
+		</ServerGroup>
+	</Setting>
+	<Log>
+<![CDATA[
+
+2014-04-12(1.0.1.2)
+1、首个正式版测试发行
+]]>
+	</Log>
+</Update>
