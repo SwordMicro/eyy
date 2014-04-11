@@ -1,21 +1,21 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="gb2312"?>
 <Update>
 	<Setting>
-		<SoftName>æµå…‰ç›’å­</SoftName>
+		<SoftName>Á÷¹âºÐ×Ó</SoftName>
 		<ShortName>tmultiplayer</ShortName>
 		<UTF8Encode>1</UTF8Encode>
 		<MainExe>launcher.exe</MainExe>
 		<Version>1.0.0.2</Version>
-		<AdCode><![CDATA[<A HREF="http://www.cnmlgb.cn/patch/download/index.html">å¦‚æžœæ›´æ–°å¤±è´¥ï¼Œè¯·ç‚¹å‡»ä¸‹è½½ç¦»çº¿è¡¥ä¸</A>]]></AdCode>
+		<AdCode><![CDATA[<A HREF="http://www.cnmlgb.cn/patch/download/index.html">Èç¹û¸üÐÂÊ§°Ü£¬Çëµã»÷ÏÂÔØÀëÏß²¹¶¡</A>]]></AdCode>
 		<ServerGroup>
-			<Server Name="ç»¼åˆçº¿è·¯" Addr="http://www.cnmlgb.cn/patch/" />
+			<Server Name="×ÛºÏÏßÂ·" Addr="http://www.cnmlgb.cn/patch/" />
 		</ServerGroup>
 	</Setting>
 	<Log>
 <![CDATA[
 
 2014-04-12(1.0.0.2)
-1ã€ä¿®å¤å¼€å¯ç›’å­åŽä¸­æ–‡è¾“å…¥é”™è¯¯çš„é—®é¢˜
+1¡¢ÐÞ¸´¿ªÆôºÐ×ÓºóÖÐÎÄÊäÈë´íÎóµÄÎÊÌâ
 ]]>
 	</Log>
 </Update>
