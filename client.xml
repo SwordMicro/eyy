@@ -5,7 +5,7 @@
 		<ShortName>tmultiplayer</ShortName>
 		<UTF8Encode>1</UTF8Encode>
 		<MainExe>launcher.exe</MainExe>
-		<Version>1.0.0.1</Version>
+		<Version>1.0.0.2</Version>
 		<AdCode><![CDATA[<A HREF="http://www.cnmlgb.cn/patch/download/index.html">如果更新失败，请点击下载离线补丁</A>]]></AdCode>
 		<ServerGroup>
 			<Server Name="综合线路" Addr="http://www.cnmlgb.cn/patch/" />
@@ -14,8 +14,8 @@
 	<Log>
 <![CDATA[
 
-2014-04-12(1.0.1.2)
-1、首个正式版测试发行
+2014-04-12(1.0.0.2)
+1、修复开启盒子后中文输入错误的问题
 ]]>
 	</Log>
 </Update>

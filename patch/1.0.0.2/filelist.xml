@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="gb2312"?>
+<Files>
+	<File Name="config.db" Type="File" Hash="27873E9F" PackHash="27873E9F"/>
+	<File Name="launcher.exe" Type="File" Hash="8FEDA914" PackHash="8FEDA914"/>
+	<File Name="ml_core.dll" Type="File" Hash="387F01D" PackHash="387F01D"/>
+	<File Name="ml_loader.dll" Type="File" Hash="ED96FD5E" PackHash="ED96FD5E"/>
+	<File Name="ml_sa.dll" Type="File" Hash="CBCF6C92" PackHash="CBCF6C92"/>
+	<File Name="sqlite3.dll" Type="File" Hash="8DF2D94C" PackHash="8DF2D94C"/>
+	<File Name="Update.exe" Type="File" Hash="355B1FEF" PackHash="355B1FEF"/>
+</Files>
